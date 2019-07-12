@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jul  5 12:37:25 2019
+
+@author: jonathan
+"""
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import pickle
+
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+from sklearn.metrics import recall_score, precision_score, accuracy_score, f1_score
+
+
+###############################################################################
+# defined functions
+def score_model(model, X_test, y_test, label, threshold):
+    """score model"""
+    print(label)
+    print()
+    
+    # predict and output confusion matrix & classification report
+    y_pred_proba = model.predict_proba(X_test)[:,1]
+    y_pred = np.where(y_pred_proba < threshold, 0, 1)
+    recall = recall_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    accuracy = accuracy_score(y_test, y_pred)
+    f_score = f1_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    true_neg = cm[0][0]
+    false_pos = cm[0][1]
+    false_neg = cm[1][0]
+    true_pos = cm[1][1]
+    print("Confusion Matrix:")
+    print(cm)
+    print()
+    print("Classification Report")
+    print(classification_report(y_test, y_pred))
+    print()
+    
+    # ROC/AUC calcs
+    y_scores_model = model.decision_function(X_test)
+    fpr_model, tpr_model, _ = roc_curve(y_test, y_scores_model)
+    roc_auc_model = auc(fpr_model, tpr_model)
+    print("Area under ROC curve = {:0.2f}".format(roc_auc_model))
+    
+    # dataframes for output
+    metrics = pd.DataFrame([[label,
+                             recall,
+                             precision,
+                             accuracy,
+                             f_score,
+                             true_neg,
+                             false_pos,
+                             false_neg,
+                             true_pos,
+                             roc_auc_model]],
+                            columns = metrics_df.columns)
+    predict = pd.DataFrame(np.column_stack((list(X_test.index), y_pred, y_pred_proba, y_test)),
+                           columns = ['Player','Predicted','Pred_Proba','Actual']
+                           ).sort_values('Pred_Proba', ascending=False)
+    predict['Label'] = label
+    predict_small = predict[(predict['Actual'].astype(float) > 0) |
+                            (predict['Predicted'].astype(float) > 0)][['Label',
+                                                                     'Player',
+                                                                     'Pred_Proba',
+                                                                     'Predicted',
+                                                                     'Actual']]
+    print(predict_small[predict_small.columns[~predict_small.columns.isin(['Label'])]])
+    
+    return metrics, predict_small
+
+def plot_feature_importance(model, num_features, featureNames, label):
+    """plot feature importances"""
+    # retrieve feature importances
+    feature_importance = model.feature_importances_
+    sorted_idx = np.argsort(feature_importance)
+    pos = np.arange(sorted_idx[-num_features:].shape[0]) + 0.5
+    
+    # plot feature importances
+    feature_plot = plt.figure(figsize=(10, num_features/4))
+    plt.subplots_adjust(left=0.25)
+    plt.barh(pos,
+             feature_importance[sorted_idx[-num_features:]],
+             align='center')
+    plt.yticks(pos, featureNames[sorted_idx[-num_features:]])
+    plt.xlabel('Feature Importance')
+    plt.title('Feature Importance')
+    plt.show()
+    
+    # feature data
+    feats = feature_importance[sorted_idx[:]]
+    featNames = featureNames[sorted_idx[:]]
+    feat_df = pd.DataFrame(np.column_stack((list(featNames), feats)),
+                           columns = ['Feature', 'Importance'])
+    feat_df['Label'] = label
+    
+    return feature_plot, feat_df
+
+
+
+###############################################################################
+# outputs
+outfolder = '/Users/jonathan/Desktop/python projects/predict_allstar/output/'
+metrics_df = pd.DataFrame(columns = ['Label',
+                                     'Recall',
+                                     'Precision',
+                                     'Accuracy',
+                                     'F_Score',
+                                     'True_Neg',
+                                     'False_Pos',
+                                     'False_Neg',
+                                     'True_Pos',
+                                     'AUC'])
+predict_df = pd.DataFrame(columns = ['Label',
+                                     'Player',
+                                     'Predicted',
+                                     'Pred_Proba',
+                                     'Actual'])
+features_df = pd.DataFrame(columns = ['Label', 'Feature', 'Importance'])
+        
+        
+###############################################################################
+# load data
+datafile = '/Users/jonathan/Desktop/python projects/predict_allstar/data/data.csv'
+data = pd.read_csv(datafile)
+data = data[(data['allstar_ever'] == 0) & 
+            (data['G'] >= 20)]
+
+
+
+###############################################################################
+# loop through years
+start_yr = 2005
+end_yr = 2018
+years = list(range(start_yr, end_yr+1))
+for i in range(len(years)):
+    # train/test sets
+    test_yr = years[i]
+    test_df = data[data['seasonYYYY'] == test_yr]
+    test_df.set_index('PlayerYear', inplace=True)
+    train_df = data[data['seasonYYYY'] != test_yr]
+    train_df.set_index('PlayerYear', inplace=True)
+    
+    # delete features
+    delete = ['seasonYYYY'
+              #,'Opp_MP_per_G'
+              #,'Opp_FGA_per_G'	
+              #,'Opp_PTS'	
+              #,'Opp_TRB_per_G'
+              #,'Opp_AST_per_G'
+             ]
+    test_df.drop(delete, inplace=True, axis=1)
+    train_df.drop(delete, inplace=True, axis=1)
+    
+    # target/feature sets
+    target = 'allstar_next'
+    y_train = train_df[target]
+    X_train = train_df.drop(labels=target, axis=1, inplace=False)
+    y_test = test_df[target]
+    X_test = test_df.drop(labels=target, axis=1, inplace=False)
+    featureNames = X_train.columns
+
+
+    ###########################################################################
+    # loop through params
+    param_list = [
+                   [20, 0.10, 5, 25, 0.15]
+                  ,[15, 0.10, 5, 25, 0.15]
+                  ,[25, 0.10, 5, 25, 0.15]
+                  ,[20, 0.05, 5, 25, 0.15]
+                  ,[20, 0.20, 5, 25, 0.15]
+                  ,[20, 0.10, 3, 25, 0.15]
+                  ,[20, 0.10, 7, 25, 0.15]
+                  ,[20, 0.10, 5, 20, 0.15]
+                  ,[20, 0.10, 5, 30, 0.15]
+                 ]
+    for i in range(len(param_list)):
+        n_estimators = param_list[i][0]
+        learning_rate = param_list[i][1]
+        max_depth = param_list[i][2]
+        min_samples_leaf = param_list[i][3]
+        threshold = param_list[i][4]
+        
+        params = (str(test_yr) + '_' + 
+                  str(n_estimators) + '_' +
+                  str(learning_rate) + '_' +
+                  str(max_depth) + '_' +
+                  str(min_samples_leaf) + '_' +
+                  str(threshold))
+        
+        # train model
+        gb = GradientBoostingClassifier(loss = 'deviance',
+                                        n_estimators = n_estimators, 
+                                        learning_rate = learning_rate, 
+                                        max_depth = max_depth, 
+                                        min_samples_leaf = min_samples_leaf,
+                                        random_state = 1337)
+        gb.fit(X_train, y_train)
+        #pickle.dump(gb, open(outfolder + 'devmodel_' + params + '.pickle', 'wb'))
+        
+        # score model
+        metrics, predict_small = score_model(gb, X_test, y_test, 
+                                             params, 
+                                             threshold=threshold)
+        metrics_df = metrics_df.append(metrics, ignore_index = True)
+        predict_df = predict_df.append(predict_small, ignore_index = True)
+        
+        # plot  feature importance
+        feature_plot, feat_df = plot_feature_importance(gb, 25, featureNames, params)
+        #feature_plot.savefig(outfolder + 'features_' + params + '.png')
+        features_df = features_df.append(feat_df, ignore_index = True)
+    
+metrics_df.to_csv(outfolder + 'allstar_model_metrics.csv', header = True)
+predict_df.to_csv(outfolder + 'allstar_model_predictions.csv', header = True)
+features_df.to_csv(outfolder + 'allstar_model_features.csv', header = True)
+    
+    
