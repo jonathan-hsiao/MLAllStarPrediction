@@ -12,10 +12,10 @@ Gradient boosting decision tree classifier
 
 
 ## Data:
-Player & team stats from basketball-reference.com
+Player & team stats from www.basketball-reference.com
 
-Media market size data from Nielsen
+Media market size data from www.nielsen.com/2018-19-dma-ranker-pdf/
 
-Offseason transactions data from https://www.prosportstransactions.com/basketball/
+Offseason transactions data from www.prosportstransactions.com/basketball/
 
 Search trends data from Google trends
