@@ -19,3 +19,9 @@ Media market size data from www.nielsen.com/2018-19-dma-ranker-pdf/
 Offseason transactions data from www.prosportstransactions.com/basketball/
 
 Search trends data from Google trends
+
+
+
+
+## Results:
+https://public.tableau.com/profile/jonathan.hsiao#!/vizhome/MLPredictFirst-TimeNBAAll-Stars/All-StarPredictions
