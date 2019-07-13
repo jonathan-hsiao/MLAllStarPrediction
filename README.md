@@ -24,4 +24,5 @@ Search trends data from Google trends
 
 
 ## Results:
+https://jonathanhsiao.com/blog/using-machine-learning-to-predict-first-time-nba-all-stars
 https://public.tableau.com/profile/jonathan.hsiao#!/vizhome/MLPredictFirst-TimeNBAAll-Stars/All-StarPredictions
